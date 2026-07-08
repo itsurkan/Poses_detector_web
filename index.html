@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTMPose Tracker - KROK</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.all.min.js"></script>
+</head>
+<body>
+    <div class="glass-container">
+        <header>
+            <h1>RTMPose Motion Tracker</h1>
+            <p>2D skeleton extraction for Table Tennis</p>
+            <div style="margin-top: 10px;">
+                <a href="movenet.html" style="color: var(--primary-color); text-decoration: none; font-size: 0.9rem;">Try MoveNet (60 FPS) &rarr;</a>
+            </div>
+        </header>
+
+        <div class="camera-wrapper">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            
+            <div id="loading" class="status-overlay">
+                <div class="spinner"></div>
+                <span id="loadingText">Loading Model...</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn primary" disabled>Start Recording</button>
+            <button id="endBtn" class="btn secondary" disabled>End & Save JSON</button>
+        </div>
+
+        <div class="status-bar">
+            <span id="statusText">Initializing...</span>
+            <span id="fpsCounter">FPS: 0</span>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
