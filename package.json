@@ -1,0 +1,12 @@
+{
+  "name": "krok",
+  "private": true,
+  "description": "KROK TUG-test tracker — Playwright e2e tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0"
+  }
+}

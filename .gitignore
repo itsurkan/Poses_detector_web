@@ -16,3 +16,11 @@ Thumbs.db
 *.json
 !pipeline.json
 !detail.json
+!package.json
+!package-lock.json
+!.claude/launch.json
+
+# Node / Playwright
+node_modules/
+test-results/
+playwright-report/

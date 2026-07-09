@@ -17,33 +17,30 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 </head>
 <body>
-    <div class="glass-container">
-        <header>
-            <h1>MoveNet Motion Tracker</h1>
-            <p>High-FPS 2D skeleton extraction for Table Tennis</p>
-            <div style="margin-top: 10px;">
-                <a href="index.html" style="color: var(--primary-color); text-decoration: none; font-size: 0.9rem;">&larr; Back to RTMPose</a>
-            </div>
-        </header>
+    <div class="camera-stage">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
 
-        <div class="camera-wrapper">
-            <video id="webcam" autoplay playsinline muted></video>
-            <canvas id="overlay"></canvas>
-            
-            <div id="loading" class="status-overlay">
-                <div class="spinner"></div>
-                <span id="loadingText">Loading Model...</span>
-            </div>
+        <div id="loading" class="status-overlay">
+            <div class="spinner"></div>
+            <span id="loadingText">Loading Model...</span>
         </div>
 
-        <div class="controls">
-            <button id="startBtn" class="btn primary" disabled>Start Recording</button>
-            <button id="endBtn" class="btn secondary" disabled>End & Save JSON</button>
+        <div class="hud hud-top">
+            <div class="hud-title glass-panel">
+                <h1>MoveNet Motion Tracker</h1>
+                <a href="index.html">&larr; RTMPose</a>
+            </div>
+            <div id="stateLabel" class="state-label glass-panel hidden"></div>
+            <span id="fpsCounter" class="hud-meta glass-panel">FPS: 0</span>
         </div>
 
-        <div class="status-bar">
-            <span id="statusText">Initializing...</span>
-            <span id="fpsCounter">FPS: 0</span>
+        <div class="hud hud-bottom">
+            <span id="statusText" class="hud-meta glass-panel">Initializing...</span>
+            <div class="controls">
+                <button id="startBtn" class="btn primary" disabled>Start Recording</button>
+                <button id="endBtn" class="btn secondary" disabled>End & Save JSON</button>
+            </div>
         </div>
     </div>
 
