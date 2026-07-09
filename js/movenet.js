@@ -15,6 +15,54 @@ let endBtn = document.getElementById('endBtn');
 let lastFrameTime = 0;
 let frameCount = 0;
 
+// --- FSM & Smoothing Variables ---
+const STATES = {
+    CALIBRATING: 0,
+    WAITING_TO_STAND: 1,
+    WALKING_AWAY: 2,
+    WALKING_BACK: 3,
+    SITTING_DOWN: 4,
+    DONE: 5
+};
+const STATE_NAMES = ["КАЛІБРУВАННЯ", "ОЧІКУВАННЯ РУХУ", "ВІДДАЛЕННЯ", "ПОВЕРНЕННЯ", "СІДАННЯ", "ЗАВЕРШЕНО"];
+
+let currentState = STATES.CALIBRATING;
+let calibrationData = { baseHipsY: 0, baseTorsoLength: 0, startX: 0, samples: 0 };
+let stateTimer = 0;
+let maxDistance = 0;
+
+let smoothedHipsX = 0;
+let smoothedHipsY = 0;
+let smoothedTorso = 0;
+const EMA_ALPHA = 0.2; // Smoothing factor
+
+// --- Voice & Audio Helpers ---
+function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'uk-UA';
+    speechSynthesis.speak(utterance);
+}
+
+function playBeep(frequency = 440, duration = 200) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.value = frequency;
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration / 1000);
+    
+    setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+    }, duration);
+}
+
 // MoveNet COCO connections (17 keypoints)
 const skeleton = [
     [15, 13], [13, 11], [16, 14], [14, 12], [11, 12], 
@@ -64,6 +112,15 @@ async function init() {
 async function processFrame() {
     if (!isRecording) return;
     
+    // Global 30-second timeout check
+    if (Date.now() - startTime > 30000 && currentState !== STATES.DONE) {
+        playBeep(300, 500);
+        speak("Таймаут. Запис скасовано.");
+        console.warn("Global timeout reached");
+        endBtn.click();
+        return;
+    }
+
     const t0 = performance.now();
     
     try {
@@ -92,6 +149,99 @@ async function processFrame() {
                 timestamp: Date.now() - startTime,
                 keypoints: keypointsArray
             });
+            
+            // --- FSM Logic ---
+            const leftHip = keypoints[11];
+            const rightHip = keypoints[12];
+            const leftShoulder = keypoints[5];
+            const rightShoulder = keypoints[6];
+
+            if (leftHip.score > 0.3 && rightHip.score > 0.3 && leftShoulder.score > 0.3 && rightShoulder.score > 0.3) {
+                const currentHipsY = (leftHip.y + rightHip.y) / 2;
+                const currentHipsX = (leftHip.x + rightHip.x) / 2;
+                const currentShouldersY = (leftShoulder.y + rightShoulder.y) / 2;
+                const currentTorso = currentHipsY - currentShouldersY; // Y goes down
+
+                if (smoothedHipsY === 0) {
+                    smoothedHipsY = currentHipsY;
+                    smoothedHipsX = currentHipsX;
+                    smoothedTorso = currentTorso;
+                } else {
+                    smoothedHipsY = EMA_ALPHA * currentHipsY + (1 - EMA_ALPHA) * smoothedHipsY;
+                    smoothedHipsX = EMA_ALPHA * currentHipsX + (1 - EMA_ALPHA) * smoothedHipsX;
+                    smoothedTorso = EMA_ALPHA * currentTorso + (1 - EMA_ALPHA) * smoothedTorso;
+                }
+
+                const timeSinceStart = Date.now() - startTime;
+                const distFromStart = Math.abs(smoothedHipsX - calibrationData.startX);
+                // Assume threshold is 15% of torso length for standing detection
+                const standThreshold = calibrationData.baseHipsY - (calibrationData.baseTorsoLength * 0.15); 
+
+                switch (currentState) {
+                    case STATES.CALIBRATING:
+                        calibrationData.baseHipsY += smoothedHipsY;
+                        calibrationData.startX += smoothedHipsX;
+                        calibrationData.baseTorsoLength += smoothedTorso;
+                        calibrationData.samples++;
+                        
+                        if (timeSinceStart > 1500) { // 1.5s calibration
+                            calibrationData.baseHipsY /= calibrationData.samples;
+                            calibrationData.startX /= calibrationData.samples;
+                            calibrationData.baseTorsoLength /= calibrationData.samples;
+                            
+                            currentState = STATES.WAITING_TO_STAND;
+                            speak("Встаньте і пройдіть 3 метри");
+                        }
+                        break;
+
+                    case STATES.WAITING_TO_STAND:
+                        // Y coordinate decreases when standing up (moves up on screen)
+                        if (smoothedHipsY < standThreshold) {
+                            playBeep(600, 300); // Signal movement start
+                            currentState = STATES.WALKING_AWAY;
+                            maxDistance = 0;
+                        }
+                        break;
+
+                    case STATES.WALKING_AWAY:
+                        if (distFromStart > maxDistance) {
+                            maxDistance = distFromStart;
+                        }
+                        // Turn detection: max distance reached (at least 30px) and now going back
+                        if (maxDistance > 30 && distFromStart < maxDistance - 15) {
+                            speak("Поверніться і сядьте");
+                            currentState = STATES.WALKING_BACK;
+                        }
+                        break;
+
+                    case STATES.WALKING_BACK:
+                        // Returned close to start X, and hips lowered again
+                        if (distFromStart < 50 && smoothedHipsY > standThreshold) {
+                            currentState = STATES.SITTING_DOWN;
+                            stateTimer = Date.now();
+                        }
+                        break;
+
+                    case STATES.SITTING_DOWN:
+                        if (smoothedHipsY < standThreshold) {
+                            // False alarm, stood up again
+                            currentState = STATES.WALKING_BACK;
+                        } else if (Date.now() - stateTimer > 1000) {
+                            playBeep(800, 400); // Signal end
+                            speak("Тест завершено");
+                            currentState = STATES.DONE;
+                            endBtn.click(); // Auto-stop
+                        }
+                        break;
+                }
+            }
+
+            // Draw State UI overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(10, 10, 250, 40);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Outfit, sans-serif';
+            ctx.fillText(`Стан: ${STATE_NAMES[currentState]}`, 20, 38);
             
             // Draw lines
             ctx.strokeStyle = '#3b82f6';
@@ -140,6 +290,15 @@ startBtn.addEventListener('click', () => {
     isRecording = true;
     recordedData = [];
     startTime = Date.now();
+    
+    // Reset FSM
+    currentState = STATES.CALIBRATING;
+    calibrationData = { baseHipsY: 0, baseTorsoLength: 0, startX: 0, samples: 0 };
+    smoothedHipsX = 0;
+    smoothedHipsY = 0;
+    smoothedTorso = 0;
+    maxDistance = 0;
+    
     startBtn.disabled = true;
     endBtn.disabled = false;
     statusText.innerText = "Recording...";
