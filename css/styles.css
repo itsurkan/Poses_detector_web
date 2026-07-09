@@ -196,3 +196,101 @@ body {
     background: var(--secondary-hover);
     transform: translateY(-2px);
 }
+
+/* --- Results popup --- */
+
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 40;
+    transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.modal {
+    width: min(340px, 90vw);
+    padding: 1.75rem;
+    border-radius: 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.modal h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.stat-primary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0.25rem 0;
+}
+
+.stat-value {
+    font-size: 2.75rem;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.risk-badge {
+    padding: 0.3rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.risk-badge.risk-low { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.risk-badge.risk-mid { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.risk-badge.risk-high { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+.stat-grid {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.5rem;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-value-sm {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.stat-label-sm {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.modal-note {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.modal .btn {
+    margin-top: 0.5rem;
+    width: 100%;
+}

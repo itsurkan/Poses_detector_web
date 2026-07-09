@@ -42,6 +42,29 @@
                 <button id="endBtn" class="btn secondary" disabled>End & Save JSON</button>
             </div>
         </div>
+
+        <div id="statsModal" class="modal-overlay hidden">
+            <div class="modal glass-panel">
+                <h2>Test Complete</h2>
+                <div class="stat-primary">
+                    <span id="statTugTime" class="stat-value">0.0s</span>
+                    <span class="stat-label">TUG Time</span>
+                </div>
+                <span id="statRiskBadge" class="risk-badge"></span>
+                <div class="stat-grid">
+                    <div class="stat">
+                        <span id="statFrames" class="stat-value-sm">0</span>
+                        <span class="stat-label-sm">Frames captured</span>
+                    </div>
+                    <div class="stat">
+                        <span id="statDuration" class="stat-value-sm">0.0s</span>
+                        <span class="stat-label-sm">Total session</span>
+                    </div>
+                </div>
+                <p class="modal-note">Reference ranges only — not a medical diagnosis.</p>
+                <button id="statsCloseBtn" class="btn primary">Close</button>
+            </div>
+        </div>
     </div>
 
     <script src="js/movenet.js"></script>

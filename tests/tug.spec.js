@@ -105,6 +105,17 @@ const spoken = (page) => page.evaluate(() => window.__spoken.map(s => s.text));
 const beeps = (page) => page.evaluate(() => window.__beeps);
 const state = (page) => page.locator('#stateLabel');
 
+/** True when the overlay canvas has no drawn pixels (fully transparent) — used
+ * to confirm the skeleton doesn't linger on screen after recording stops. */
+const canvasIsBlank = (page) => page.evaluate(() => {
+    const canvas = document.getElementById('overlay');
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < data.length; i += 4) {
+        if (data[i] !== 0) return false; // non-zero alpha = a drawn pixel
+    }
+    return true;
+});
+
 async function runFor(page, ms) {
     // Advance in rAF-sized steps so the processFrame loop and EMA smoothing tick
     for (let t = 0; t < ms; t += 1000) {
@@ -166,6 +177,9 @@ test.describe('TUG test flow', () => {
         await expect(page.locator('#endBtn')).toBeDisabled();
         await expect(page.locator('#statusText')).toHaveText('Ready');
         await expect(state(page)).toBeVisible();
+
+        // The last frame's skeleton must not linger once the test has ended
+        expect(await canvasIsBlank(page)).toBe(true);
     });
 
     test('start gate: calibration waits until the person actually sits, then re-prompts', async ({ page }) => {
@@ -235,6 +249,61 @@ test.describe('TUG test flow', () => {
         await expect(state(page)).toBeHidden();
         await expect(page.locator('#startBtn')).toBeEnabled();
         expect(await spoken(page)).not.toContain(PHRASES.done);
+    });
+
+    test('results popup: shows TUG time, risk band and frame count only on genuine completion', async ({ page }) => {
+        const modal = page.locator('#statsModal');
+        await expect(modal).toBeHidden();
+
+        await reachGoSignal(page);
+        await walkOutAndReturn(page);
+
+        // Not shown yet — the person hasn't sat back down
+        await expect(modal).toBeHidden();
+
+        await setPose(page, POSES.sitting);
+        await runFor(page, 2000);
+        await expect(state(page)).toHaveText('ЗАВЕРШЕНО');
+
+        await expect(modal).toBeVisible();
+        const tugText = await page.locator('#statTugTime').textContent();
+        expect(tugText).toMatch(/^\d+\.\d+s$/); // e.g. "6.0s"
+        const tugSeconds = parseFloat(tugText);
+        // walkOutAndReturn + the sit-confirmation delay is ~6s of walking after the go signal
+        expect(tugSeconds).toBeGreaterThan(3);
+        expect(tugSeconds).toBeLessThan(15);
+
+        expect(await page.locator('#statRiskBadge').textContent()).toMatch(
+            /Normal mobility|Mostly independent|Variable mobility|High fall risk/
+        );
+        expect(Number(await page.locator('#statFrames').textContent())).toBeGreaterThan(0);
+        expect(await page.locator('#statDuration').textContent()).toMatch(/^\d+\.\d+s$/);
+
+        // Closing hides it again without affecting the saved recording
+        await page.locator('#statsCloseBtn').click();
+        await expect(modal).toBeHidden();
+    });
+
+    test('results popup: risk bands map correctly to TUG time', async ({ page }) => {
+        expect(await page.evaluate(() => tugRiskCategory(8).label)).toBe('Normal mobility');
+        expect(await page.evaluate(() => tugRiskCategory(15).label)).toBe('Mostly independent');
+        expect(await page.evaluate(() => tugRiskCategory(25).label)).toBe('Variable mobility');
+        expect(await page.evaluate(() => tugRiskCategory(35).label)).toBe('High fall risk');
+    });
+
+    test('results popup: does not appear on manual stop or on timeout', async ({ page }) => {
+        const modal = page.locator('#statsModal');
+
+        await setPose(page, POSES.sitting);
+        await page.locator('#startBtn').click();
+        await runFor(page, 4500);
+        await page.locator('#endBtn').click(); // manual stop mid-test
+        await expect(modal).toBeHidden();
+
+        await reachGoSignal(page);
+        await runFor(page, 31_000); // stays seated past the go signal -> timeout
+        expect(await spoken(page)).toContain(PHRASES.timeout);
+        await expect(modal).toBeHidden();
     });
 
     test('restart: a second run works and repeats all instructions', async ({ page }) => {

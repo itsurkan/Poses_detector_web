@@ -12,6 +12,12 @@ let loadingOverlay = document.getElementById('loading');
 let startBtn = document.getElementById('startBtn');
 let endBtn = document.getElementById('endBtn');
 let stateLabel = document.getElementById('stateLabel');
+let statsModal = document.getElementById('statsModal');
+let statTugTime = document.getElementById('statTugTime');
+let statRiskBadge = document.getElementById('statRiskBadge');
+let statFrames = document.getElementById('statFrames');
+let statDuration = document.getElementById('statDuration');
+let statsCloseBtn = document.getElementById('statsCloseBtn');
 
 let lastFrameTime = 0;
 let frameCount = 0;
@@ -59,6 +65,32 @@ function isSeated() {
     if (!kneesVisible || smoothedTorso <= 0) return null;
     return (smoothedKneesY - smoothedHipsY) < smoothedTorso * 0.35;
 }
+
+// --- Results popup ---
+// Standard TUG interpretation bands (Podsiadlo & Richardson 1991; Shumway-Cook
+// et al. 2000) — shown as a reference range, not a diagnosis.
+function tugRiskCategory(seconds) {
+    if (seconds < 10) return { label: 'Normal mobility', className: 'risk-low' };
+    if (seconds < 20) return { label: 'Mostly independent', className: 'risk-low' };
+    if (seconds < 30) return { label: 'Variable mobility', className: 'risk-mid' };
+    return { label: 'High fall risk', className: 'risk-high' };
+}
+
+function showStatsPopup({ tugTimeMs, framesCaptured, sessionMs }) {
+    const tugSeconds = tugTimeMs / 1000;
+    const risk = tugRiskCategory(tugSeconds);
+    statTugTime.textContent = tugSeconds.toFixed(1) + 's';
+    statRiskBadge.textContent = risk.label;
+    statRiskBadge.className = 'risk-badge ' + risk.className;
+    statFrames.textContent = String(framesCaptured);
+    statDuration.textContent = (sessionMs / 1000).toFixed(1) + 's';
+    statsModal.classList.remove('hidden');
+}
+
+statsCloseBtn.addEventListener('click', () => statsModal.classList.add('hidden'));
+statsModal.addEventListener('click', (e) => {
+    if (e.target === statsModal) statsModal.classList.add('hidden');
+});
 
 // --- Voice & Audio Helpers ---
 // Web Speech API rarely ships a Ukrainian voice, so instructions are spoken
@@ -335,15 +367,25 @@ async function processFrame() {
                             // False alarm: stood up again / hovering at the chair without sitting
                             setState(STATES.WALKING_BACK);
                         } else if (Date.now() - stateTimer > 1000) {
+                            // Snapshot before endBtn.click() below resets/consumes them
+                            const tugTimeMs = Date.now() - goSignalAt;
+                            const framesCaptured = recordedData.length;
+                            const sessionMs = Date.now() - startTime;
+
                             setState(STATES.DONE);
                             playBeep(800, 200); // Signal end
                             setTimeout(() => playBeep(1000, 350), 250);
                             speak("Test completed. Well done.");
                             endBtn.click(); // Auto-stop
+                            showStatsPopup({ tugTimeMs, framesCaptured, sessionMs });
                         }
                         break;
                 }
             }
+
+            // The branch above may have just auto-stopped recording (endBtn.click()
+            // already cleared the canvas) — don't repaint a stale skeleton over it.
+            if (!isRecording) return;
 
             // Draw lines
             ctx.strokeStyle = '#3b82f6';
@@ -401,6 +443,7 @@ startBtn.addEventListener('click', () => {
     // Reset FSM
     setState(STATES.PRE_CALIBRATION);
     stateLabel.classList.remove('hidden');
+    statsModal.classList.add('hidden');
     calibrationData = { baseHipsY: 0, baseTorsoLength: 0, startX: 0, samples: 0 };
     calibrationStartedAt = 0;
     goSignalAt = 0;
